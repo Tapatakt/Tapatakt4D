@@ -28,6 +28,7 @@ public sealed class TesseractScene : Scene4D
     /// <inheritdoc />
     public override void Update(float dt)
     {
+        
         // Small incremental rotation for this frame
         float deltaAngle = dt * _rotationSpeed;
         Matrix4 rotXW = Rotation4D.CreateRotationXW(deltaAngle * 0.005f);
@@ -37,5 +38,6 @@ public sealed class TesseractScene : Scene4D
 
         // Rotate tesseract around its center (origin)
         _tesseract.Rotate(frameRotation);
+        
     }
 }

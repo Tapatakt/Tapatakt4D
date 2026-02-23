@@ -40,31 +40,32 @@ public sealed class Camera
 
     /// <summary>
     /// Moves the camera by the specified delta relative to camera orientation.
+    /// Delta is in camera space (e.g., (0,0,-1,0) = forward), transformed to world space.
     /// </summary>
     public void Move(Vector4 delta)
     {
-        Vector4 transformedDelta = Rotation * delta;
+        Vector4 transformedDelta = RotationInverse * delta;
         Position += transformedDelta;
     }
 
     /// <summary>
     /// Rotates the camera by the specified angles in the given planes.
-    /// Angles are applied in world space.
+    /// Angles are applied relative to camera orientation (FPS-style).
     /// </summary>
     public void Rotate(float angleXY = 0, float angleXZ = 0, float angleXW = 0,
                         float angleYZ = 0, float angleYW = 0, float angleZW = 0)
     {
-        // Build rotation - order matters for 4D!
-        Matrix4 rot = Matrix4.Identity;
+        // Build local rotation in camera space
+        Matrix4 localRot = Matrix4.Identity;
         
-        if (angleZW != 0) rot = Rotation4D.CreateRotationZW(angleZW) * rot;
-        if (angleXW != 0) rot = Rotation4D.CreateRotationXW(angleXW) * rot;
-        if (angleYW != 0) rot = Rotation4D.CreateRotationYW(angleYW) * rot;
-        if (angleXZ != 0) rot = Rotation4D.CreateRotationXZ(angleXZ) * rot;
-        if (angleYZ != 0) rot = Rotation4D.CreateRotationYZ(angleYZ) * rot;
-        if (angleXY != 0) rot = Rotation4D.CreateRotationXY(angleXY) * rot;
+        if (angleXY != 0) localRot *= Rotation4D.CreateRotationXY(angleXY);
+        if (angleYZ != 0) localRot *= Rotation4D.CreateRotationYZ(angleYZ);
+        if (angleXZ != 0) localRot *= Rotation4D.CreateRotationXZ(angleXZ);
+        if (angleYW != 0) localRot *= Rotation4D.CreateRotationYW(angleYW);
+        if (angleXW != 0) localRot *= Rotation4D.CreateRotationXW(angleXW);
+        if (angleZW != 0) localRot *= Rotation4D.CreateRotationZW(angleZW);
 
-        // Apply rotation in world space
-        Rotation = rot * Rotation;
+        // Pre-multiply: local rotation happens first (in camera space), then existing rotation
+        Rotation = Rotation * localRot;
     }
 }

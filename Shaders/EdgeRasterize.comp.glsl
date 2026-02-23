@@ -15,11 +15,11 @@ struct Edge4D
 
 // Output: Projected edges
 // x,y = screen position
-// z = camera-space Z (for perspective-correct W clipping)
+// z = distance from camera (for perspective-correct W clipping)
 // w = original W (for color)
 struct EdgeProjection
 {
-    vec4 start;  // xyzw = screen xy, camera Z, original W
+    vec4 start;  // xyzw = screen xy, distance, original W
     vec4 end;
     float thickness;
 };
@@ -63,11 +63,10 @@ vec4 WorldToCamera(vec4 worldPos)
 }
 
 // Project 4D point to screen
-// Returns: vec4(screen_x, screen_y, depth, original_w)
+// Returns: vec4(screen_x, screen_y, distance, original_w)
 vec4 Project4D(vec4 p)
 {
     // Use actual Euclidean distance from camera for projection
-    // This works regardless of which direction the camera looks
     float dist = length(p);
     
     // Clamp to avoid division by zero
@@ -86,8 +85,46 @@ vec4 Project4D(vec4 p)
     y = (y + 1.0) * 0.5 * float(screenSize.y);
     
     // Return screen xy + distance + original W (for color)
-    // Note: p.z is still passed for W clipping consistency
     return vec4(x, y, dist, p.w);
+}
+
+// Clip edge to near plane (z = 0)
+// Returns true if edge is visible after clipping
+bool ClipEdge(vec4 start, vec4 end, out vec4 clippedStart, out vec4 clippedEnd)
+{
+    float startZ = start.z;
+    float endZ = end.z;
+    
+    // Both behind camera - cull
+    if (startZ > 0.0 && endZ > 0.0)
+        return false;
+    
+    // Both in front - keep as-is
+    if (startZ <= 0.0 && endZ <= 0.0)
+    {
+        clippedStart = start;
+        clippedEnd = end;
+        return true;
+    }
+    
+    // One in front, one behind - clip to z = 0
+    float t = startZ / (startZ - endZ);  // Interpolation factor
+    vec4 clippedPoint = mix(start, end, t);
+    clippedPoint.z = 0.0;  // Exactly at near plane
+    
+    if (startZ <= 0.0)
+    {
+        // Start in front, end behind
+        clippedStart = start;
+        clippedEnd = clippedPoint;
+    }
+    else
+    {
+        // Start behind, end in front
+        clippedStart = clippedPoint;
+        clippedEnd = end;
+    }
+    return true;
 }
 
 void main()
@@ -104,9 +141,20 @@ void main()
     vec4 startCamera = WorldToCamera(e.start);
     vec4 endCamera = WorldToCamera(e.end);
     
+    // Clip to near plane
+    vec4 clippedStart, clippedEnd;
+    if (!ClipEdge(startCamera, endCamera, clippedStart, clippedEnd))
+    {
+        // Both points behind camera - mark as invalid
+        projections[edgeId].start = vec4(-1.0, -1.0, -1.0, -1.0);
+        projections[edgeId].end = vec4(-1.0, -1.0, -1.0, -1.0);
+        projections[edgeId].thickness = 0.0;
+        return;
+    }
+    
     // Project to screen space
-    vec4 start = Project4D(startCamera);
-    vec4 end = Project4D(endCamera);
+    vec4 start = Project4D(clippedStart);
+    vec4 end = Project4D(clippedEnd);
     
     // Store projection for fragment shader
     projections[edgeId].start = start;

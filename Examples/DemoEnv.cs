@@ -17,10 +17,6 @@ public class DemoEnv : IDisposable
     private int _frameNumber;
     private readonly Camera _camera;
 
-    // Mouse state tracking
-    private Vector2 _lastMousePos;
-    private bool _firstMouse = true;
-
     // Sensitivity settings
     private const float MouseSensitivity = 0.002f;
     private const float MoveSpeed = 3.0f;
@@ -94,8 +90,7 @@ public class DemoEnv : IDisposable
         GL.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         GL.Disable(EnableCap.DepthTest);
 
-        // Center mouse and hide cursor
-        _lastMousePos = new Vector2(Width / 2.0f, Height / 2.0f);
+        // Hide cursor and capture mouse
         if (_window != null)
         {
             _window.CursorState = CursorState.Grabbed;
@@ -207,24 +202,8 @@ public class DemoEnv : IDisposable
     {
         float rotSpeed = RotationSpeed * dt;
 
-        // Mouse movement for yaw (XZ) and pitch (YZ)
-        Vector2 mousePos = window.MouseState.Position;
-
-        if (_firstMouse)
-        {
-            _lastMousePos = mousePos;
-            _firstMouse = false;
-        }
-
-        Vector2 delta = mousePos - _lastMousePos;
-        _lastMousePos = mousePos;
-
-        // Reset mouse to center to allow unlimited rotation
-        if (_window != null)
-        {
-            _window.MousePosition = new Vector2(Width / 2.0f, Height / 2.0f);
-            _lastMousePos = new Vector2(Width / 2.0f, Height / 2.0f);
-        }
+        // Use raw mouse delta for rotation (works with grabbed cursor)
+        Vector2 delta = window.MouseState.Delta;
 
         // Yaw (XZ plane) - mouse X
         if (delta.X != 0)

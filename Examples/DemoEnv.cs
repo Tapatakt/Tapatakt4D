@@ -15,7 +15,16 @@ public class DemoEnv : IDisposable
     private GameWindow? _window;
     private WireRenderer? _renderer;
     private int _frameNumber;
-    private readonly Camera _camera;
+    private Camera _camera;
+    
+    /// <summary>
+    /// Gets or sets the camera.
+    /// </summary>
+    public Camera Camera
+    {
+        get => _camera;
+        set => _camera = value ?? throw new ArgumentNullException(nameof(value));
+    }
 
     // Sensitivity settings
     private const float MouseSensitivity = 0.002f;
@@ -43,11 +52,6 @@ public class DemoEnv : IDisposable
     public string Title { get; set; } = "Tapatakt4D";
 
     /// <summary>
-    /// The camera used for rendering.
-    /// </summary>
-    public Camera Camera => _camera;
-
-    /// <summary>
     /// Creates a new demo environment with the specified scene and dimensions.
     /// </summary>
     public DemoEnv(Scene4D scene, int width = 1280, int height = 720)
@@ -55,7 +59,7 @@ public class DemoEnv : IDisposable
         Scene = scene ?? throw new ArgumentNullException(nameof(scene));
         Width = width;
         Height = height;
-        _camera = new Camera();
+        _camera = new();
     }
 
     /// <summary>
@@ -132,7 +136,7 @@ public class DemoEnv : IDisposable
         GL.Clear(ClearBufferMask.ColorBufferBit);
 
         // Render edges with camera transformation done in shader
-        _renderer.Render(Scene.GetEdges(), _camera.RotationInverse, _camera.Position, _camera.ProjectionDistance);
+        _renderer.Render(Scene.GetEdges(), _camera);
 
         _window?.SwapBuffers();
         _frameNumber++;
@@ -205,19 +209,21 @@ public class DemoEnv : IDisposable
         // Use raw mouse delta for rotation (works with grabbed cursor)
         Vector2 delta = window.MouseState.Delta;
 
+        
         // Yaw (XZ plane) - mouse X
         if (delta.X != 0)
             _camera.Rotate(angleXZ: -delta.X * MouseSensitivity);
 
         // Pitch (YZ plane) - mouse Y (inverted because camera looks at negative Z)
         if (delta.Y != 0)
-            _camera.Rotate(angleYZ: delta.Y * MouseSensitivity);
+            _camera.Rotate(angleYZ: -delta.Y * MouseSensitivity);
+        
 
         // Roll (XY plane) - Q/E
         if (window.KeyboardState.IsKeyDown(Keys.Q))
-            _camera.Rotate(angleXY: -rotSpeed);
-        if (window.KeyboardState.IsKeyDown(Keys.E))
             _camera.Rotate(angleXY: rotSpeed);
+        if (window.KeyboardState.IsKeyDown(Keys.E))
+            _camera.Rotate(angleXY: -rotSpeed);
 
         // ZW rotation - Mouse wheel
         float wheelDelta = window.MouseState.ScrollDelta.Y;
@@ -236,6 +242,7 @@ public class DemoEnv : IDisposable
         if (window.KeyboardState.IsKeyDown(Keys.D3))
             _camera.Rotate(angleYW: -rotSpeed);
     }
+    
 
     /// <summary>
     /// Disposes of resources.

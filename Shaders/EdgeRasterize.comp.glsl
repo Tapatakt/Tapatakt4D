@@ -1,6 +1,7 @@
 #version 430 core
 
 // Tapatakt4D - Compute shader for edge projection and tile rasterization
+// Uses dual quaternion representation for camera rotation
 
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
@@ -45,21 +46,46 @@ layout(std430, binding = 3) buffer TileDataBuffer
     uint tileEdgeIds[];  // Flattened: tileIndex * maxEdgesPerTile + slot
 };
 
-// Camera data
-uniform mat4 cameraRotationInv;  // Inverse camera rotation (world to camera)
-uniform vec4 cameraPosition;     // Camera position (world space)
-uniform float projectionDist;    // Distance for perspective projection
+// Camera data - dual quaternion representation
+// Rotation of vector v: v' = left * v * right
+uniform vec4 cameraLeftQuat;       // Left inverted camera rotation quaternion (xyzw)
+uniform vec4 cameraRightQuat;      // Right inverted camera rotation quaternion (xyzw)
+uniform vec4 cameraPosition;       // Camera position (world space)
+uniform float projectionDist;      // Distance for perspective projection
 uniform ivec2 screenSize;
-uniform ivec2 gridSize;          // Tile grid dimensions
-uniform int tileSize;            // Pixels per tile
+uniform ivec2 gridSize;            // Tile grid dimensions
+uniform int tileSize;              // Pixels per tile
 uniform int maxEdgesPerTile;
 uniform int edgeCount;
 
-// Transform world space to camera space
+// Quaternion multiplication: a * b
+vec4 QuatMul(vec4 a, vec4 b)
+{
+    return vec4(
+        a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+        a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+        a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+        a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z
+    );
+}
+
+// Quaternion conjugation
+vec4 Conjugation(vec4 q)
+{
+    return vec4(-q.xyz, q.w);
+}
+
+// Rotate vector v by quaternion pair (left, right): v' = left * v * conjugation(right)
+vec4 RotateByQuatPair(vec4 v, vec4 left, vec4 right)
+{
+    return QuatMul(QuatMul(left, v), Conjugation(right));
+}
+
+// Transform world space to camera space using dual quaternion
 vec4 WorldToCamera(vec4 worldPos)
 {
-    // Apply inverse rotation, then subtract camera position
-    return cameraRotationInv * (worldPos - cameraPosition);
+    vec4 delta = worldPos - cameraPosition;
+    return RotateByQuatPair(delta, cameraLeftQuat, cameraRightQuat);
 }
 
 // Project 4D point to screen

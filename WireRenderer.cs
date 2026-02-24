@@ -191,38 +191,40 @@ public sealed class WireRenderer : IDisposable
     }
     
     /// <summary>
-    /// Renders a frame of 4D wireframe geometry.
+    /// Renders a frame of 4D wireframe geometry using dual quaternion camera representation.
     /// </summary>
     /// <param name="edges">The edges to render in world space.</param>
-    /// <param name="cameraRotationInv">Inverse camera rotation matrix.</param>
-    /// <param name="cameraPosition">Camera position in world space.</param>
-    /// <param name="projectionDistance">Distance for perspective projection.</param>
-    public void Render(List<Edge4D> edges, Matrix4 cameraRotationInv, Vector4 cameraPosition, float projectionDistance = 3.0f)
+    /// <param name="camera">The camera with dual quaternion rotation.</param>
+    public void Render(List<Edge4D> edges, Camera camera)
     {
         int edgeCount = edges.Count;
-        
+
         // Upload edge data
         GL.BindBuffer(BufferTarget.ShaderStorageBuffer, _edge4DBuffer);
         int edgeDataSize = edgeCount * Marshal.SizeOf<Edge4D>();
         GL.BufferSubData(BufferTarget.ShaderStorageBuffer, IntPtr.Zero, edgeDataSize, edges.ToArray());
-        
+
         // Clear tile counts to zero
         GL.BindBuffer(BufferTarget.ShaderStorageBuffer, _tileCountBuffer);
         GL.BufferSubData(BufferTarget.ShaderStorageBuffer, IntPtr.Zero, _tileCount * sizeof(uint), _zeroArray);
-        
+
         // Run compute shader
         GL.UseProgram(_computeProgram);
-        
+
         // Bind SSBOs
         GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 0, _edge4DBuffer);
         GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 1, _projectionBuffer);
         GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 2, _tileCountBuffer);
         GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 3, _tileDataBuffer);
-        
-        // Set uniforms
-        GL.UniformMatrix4(GL.GetUniformLocation(_computeProgram, "cameraRotationInv"), false, ref cameraRotationInv);
-        GL.Uniform4(GL.GetUniformLocation(_computeProgram, "cameraPosition"), cameraPosition);
-        GL.Uniform1(_projDistLoc, projectionDistance);
+
+        // Set uniforms - dual quaternion representation
+        // OpenTK Quaternion is (X, Y, Z, W), GLSL vec4 is (x, y, z, w) - matches directly
+        Quaternion leftInv = camera.LeftQuaternionInverse;
+        Quaternion rightInv = camera.RightQuaternionInverse;
+        GL.Uniform4(GL.GetUniformLocation(_computeProgram, "cameraLeftQuat"), leftInv.X, leftInv.Y, leftInv.Z, leftInv.W);
+        GL.Uniform4(GL.GetUniformLocation(_computeProgram, "cameraRightQuat"), rightInv.X, rightInv.Y, rightInv.Z, rightInv.W);
+        GL.Uniform4(GL.GetUniformLocation(_computeProgram, "cameraPosition"), camera.Position);
+        GL.Uniform1(_projDistLoc, camera.ProjectionDistance);
         GL.Uniform2(_screenSizeLoc, _width, _height);
         GL.Uniform2(_gridSizeLoc, _gridW, _gridH);
         GL.Uniform1(_tileSizeLoc, TileSize);

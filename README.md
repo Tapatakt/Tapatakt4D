@@ -34,7 +34,7 @@ TesseractScene scene = new(
 );
 
 // Setup camera
-camera = new Camera(
+Camera camera = new(
     position: new Vector4(0, 0, 8, 0),  // 8 units back
     projectionDistance: 2.0f
 );
@@ -42,7 +42,7 @@ camera = new Camera(
 // Render
 using WireRenderer renderer = new(1280, 720);
 List<Edge4D> edges = scene.GetEdges();
-renderer.Render(edges, camera.RotationInverse, camera.Position, camera.ProjectionDistance);
+renderer.Render(edges, camera);
 ```
 
 See `Examples/TesseractScene.cs` for a complete demo with controls.

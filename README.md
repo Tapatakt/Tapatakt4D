@@ -34,7 +34,7 @@ TesseractScene scene = new(
 );
 
 // Setup camera
-Camera camera = new(
+FreeCamera camera = new(
     position: new Vector4(0, 0, 8, 0),  // 8 units back
     projectionDistance: 2.0f
 );

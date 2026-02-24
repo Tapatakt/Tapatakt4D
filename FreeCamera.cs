@@ -5,11 +5,11 @@ using System;
 namespace Tapatakt4D;
 
 /// <summary>
-/// 4D camera using dual quaternion representation.
+/// Free 4D camera using dual quaternion representation with full rotation freedom.
 /// Any 4D rotation can be represented as v' = left * v * right
 /// where left and right are unit quaternions.
 /// </summary>
-public sealed class Camera
+public class FreeCamera : ICamera
 {
     /// <summary>
     /// Camera position in 4D world space.
@@ -19,12 +19,15 @@ public sealed class Camera
     /// <summary>
     /// Left rotation quaternion.
     /// </summary>
-    private Quaternion _left = Quaternion.Identity;
+    /// <summary>
+    /// Left rotation quaternion.
+    /// </summary>
+    protected Quaternion _left = Quaternion.Identity;
 
     /// <summary>
     /// Right rotation quaternion.
     /// </summary>
-    private Quaternion _right = Quaternion.Identity;
+    protected Quaternion _right = Quaternion.Identity;
 
     /// <summary>
     /// Gets the left quaternion for world-to-camera transform.
@@ -54,9 +57,9 @@ public sealed class Camera
     public float ProjectionDistance { get; set; }
 
     /// <summary>
-    /// Creates a new camera at the specified position.
+    /// Creates a new free camera at the specified position.
     /// </summary>
-    public Camera(Vector4? position = null, float projectionDistance = 2.0f)
+    public FreeCamera(Vector4? position = null, float projectionDistance = 2.0f)
     {
         Position = position ?? new Vector4(0.0f, 0.0f, 8.0f, 0.0f);
         ProjectionDistance = projectionDistance;
@@ -168,22 +171,31 @@ public sealed class Camera
         _left = Quaternion.Normalize(left * _left);
         _right = Quaternion.Normalize(_right * right);
     }
-    /*
-    // for rotations testing
+
+    /// <summary>
+    /// Gets the forward direction vector (-Z in camera space).
+    /// </summary>
+    public Vector4 Forward => RotateVector(new Vector4(0, 0, -1, 0));
+
+    /// <summary>
+    /// Gets the right direction vector (+X in camera space).
+    /// </summary>
+    public Vector4 Right => RotateVector(new Vector4(1, 0, 0, 0));
+
+    /// <summary>
+    /// Gets the up direction vector (+Y in camera space).
+    /// </summary>
+    public Vector4 Up => RotateVector(new Vector4(0, 1, 0, 0));
+
+    /// <summary>
+    /// Gets the ana direction vector (+W in camera space).
+    /// </summary>
+    public Vector4 Ana => RotateVector(new Vector4(0, 0, 0, 1));
+
     private Vector4 RotateVector(Vector4 v)
     {
-        Console.WriteLine($"Rotate v = {v}");
-        Quaternion q = new(v.Xyz, v.W);
-        Console.WriteLine($"q = {q}");
+        Quaternion q = new(v.X, v.Y, v.Z, v.W);
         Quaternion rotatedQ = _left * q * Quaternion.Conjugate(_right);
-        Console.WriteLine($"rotatedQ = {rotatedQ}");
-        Vector4 rotated = new(rotatedQ.Xyz, rotatedQ.W);
-        Console.WriteLine($"rotated = {rotated}\n");
-        return rotated;
+        return new Vector4(rotatedQ.X, rotatedQ.Y, rotatedQ.Z, rotatedQ.W);
     }
-    public Vector4 Forward => RotateVector(new Vector4(0, 0, -1, 0));
-    public Vector4 Right => RotateVector(new Vector4(1, 0, 0, 0));
-    public Vector4 Up => RotateVector(new Vector4(0, 1, 0, 0));
-    public Vector4 Ana => RotateVector(new Vector4(0, 0, 0, 1));
-    */
 }

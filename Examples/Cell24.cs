@@ -16,7 +16,7 @@ public sealed class Cell24 : Shape4D
     /// <param name="origin">Center position.</param>
     /// <param name="size">Scale factor (default 1.0).</param>
     /// <param name="thickness">Edge thickness.</param>
-    public Cell24(Vector4 origin, float size = 1.0f, float thickness = 1.0f)
+    public Cell24(Vector4 origin, float size = 1.0f, float thickness = 5.0f)
         : base(origin)
     {
         BuildCell24(size, thickness);

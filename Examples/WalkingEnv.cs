@@ -8,25 +8,18 @@ using System;
 namespace Tapatakt4D.Examples;
 
 /// <summary>
-/// Demo environment that hosts a window and runs a 4D scene.
+/// Walking environment with floor-bound movement.
+/// Camera stays at Y=1, can only yaw (limited), movement projected to XZW plane.
 /// </summary>
-public class DemoEnv : IDisposable
+public class WalkingEnv : IDisposable
 {
     private GameWindow? _window;
     private WireRenderer? _renderer;
     private int _frameNumber;
     private ICamera _camera;
-    
-    /// <summary>
-    /// Gets or sets the camera.
-    /// </summary>
-    public ICamera Camera
-    {
-        get => _camera;
-        set => _camera = value ?? throw new ArgumentNullException(nameof(value));
-    }
+    private float _currentPitch = 0.0f;
 
-    // Sensitivity settings
+    private const float MaxPitchAngle = 80.0f * MathF.PI / 180.0f;
     private const float MouseSensitivity = 0.002f;
     private const float MoveSpeed = 3.0f;
     private const float RotationSpeed = 1.5f;
@@ -49,21 +42,30 @@ public class DemoEnv : IDisposable
     /// <summary>
     /// Window title.
     /// </summary>
-    public string Title { get; set; } = "Tapatakt4D";
+    public string Title { get; set; } = "Tapatakt4D Walking";
 
     /// <summary>
-    /// Creates a new demo environment with the specified scene and dimensions.
+    /// Gets or sets the camera.
     /// </summary>
-    public DemoEnv(Scene4D scene, int width = 1280, int height = 720)
+    public ICamera Camera
+    {
+        get => _camera;
+        set => _camera = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary>
+    /// Creates a new walking environment with the specified scene.
+    /// </summary>
+    public WalkingEnv(Scene4D scene, int width = 1280, int height = 720)
     {
         Scene = scene ?? throw new ArgumentNullException(nameof(scene));
         Width = width;
         Height = height;
-        _camera = new FreeCamera(new(0f, 1f, 8f, 0f), 2);
+        _camera = new WalkingCamera(new Vector4(0.0f, 1.0f, 8.0f, 0.0f));
     }
 
     /// <summary>
-    /// Runs the demo loop. Blocks until window is closed.
+    /// Runs the walking demo loop. Blocks until window is closed.
     /// </summary>
     public void Run()
     {
@@ -94,11 +96,8 @@ public class DemoEnv : IDisposable
         GL.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         GL.Disable(EnableCap.DepthTest);
 
-        // Hide cursor and capture mouse
         if (_window != null)
-        {
             _window.CursorState = CursorState.Grabbed;
-        }
     }
 
     private void OnResize(ResizeEventArgs e)
@@ -121,10 +120,7 @@ public class DemoEnv : IDisposable
             return;
         }
 
-        // Process user controls
         Controls(dt);
-
-        // Update scene
         Scene.Update(dt);
     }
 
@@ -134,10 +130,7 @@ public class DemoEnv : IDisposable
             return;
 
         GL.Clear(ClearBufferMask.ColorBufferBit);
-
-        // Render edges with camera transformation done in shader
         _renderer.Render(Scene.GetEdges(), _camera);
-
         _window?.SwapBuffers();
         _frameNumber++;
     }
@@ -150,7 +143,7 @@ public class DemoEnv : IDisposable
     }
 
     /// <summary>
-    /// Processes user input controls.
+    /// Walking controls: Y locked, no roll or YW rotation, yaw limited, movement projected to XZW.
     /// </summary>
     public virtual void Controls(float dt)
     {
@@ -159,90 +152,84 @@ public class DemoEnv : IDisposable
 
         HandleMovement(dt, _window);
         HandleRotations(dt, _window);
+
+        if (_window.KeyboardState.IsKeyDown(Keys.Space))
+        {
+            Console.WriteLine($"\nForward = {Camera.Forward}\nRight = {Camera.Right}\nUp = {Camera.Up}\nAna = {Camera.Ana}");
+            Quaternion l = _camera.LeftQuaternionInverse;
+            Quaternion r = _camera.RightQuaternionInverse;
+            Console.WriteLine($"Yaw: {_currentPitch * 180.0f / MathF.PI:F1}°");
+            Console.WriteLine($"LeftInv =({l.X:F4}, {l.Y:F4}, {l.Z:F4}, {l.W:F4})");
+            Console.WriteLine($"RightInv=({r.X:F4}, {r.Y:F4}, {r.Z:F4}, {r.W:F4})");
+        }
     }
 
     /// <summary>
-    /// Handles movement controls (W/S Z, A/D X, Shift/Ctrl Y, Z/X W).
+    /// Handles movement like a first-person game:
+    /// - XZW movement uses camera's projected directions (pitch doesn't affect speed)
+    /// - Y stays locked to 1 (no vertical movement)
     /// </summary>
     private void HandleMovement(float dt, GameWindow window)
     {
         float speed = MoveSpeed * dt;
-        Vector4 moveDelta = Vector4.Zero;
 
-        // Z axis (forward/back) - W/S
-        // Camera looks at negative Z, so forward is negative Z
+        // Build camera-space movement delta
+        // X = right/left, Z = forward/back, W = ana/kata, Y = 0 (locked)
+        Vector4 cameraDelta = Vector4.Zero;
+
+        // Forward/back - W/S
         if (window.KeyboardState.IsKeyDown(Keys.W))
-            moveDelta.Z -= speed;
+            cameraDelta.Z += speed;
         if (window.KeyboardState.IsKeyDown(Keys.S))
-            moveDelta.Z += speed;
+            cameraDelta.Z -= speed;
 
-        // X axis (left/right) - A/D
+        // Left/right - A/D
         if (window.KeyboardState.IsKeyDown(Keys.A))
-            moveDelta.X -= speed;
+            cameraDelta.X -= speed;
         if (window.KeyboardState.IsKeyDown(Keys.D))
-            moveDelta.X += speed;
+            cameraDelta.X += speed;
 
-        // Y axis (up/down) - Shift/Ctrl
-        if (window.KeyboardState.IsKeyDown(Keys.LeftShift) || window.KeyboardState.IsKeyDown(Keys.RightShift))
-            moveDelta.Y += speed;
-        if (window.KeyboardState.IsKeyDown(Keys.LeftControl) || window.KeyboardState.IsKeyDown(Keys.RightControl))
-            moveDelta.Y -= speed;
+        // Ana/kata - Q/E
+        if (window.KeyboardState.IsKeyDown(Keys.Q))
+            cameraDelta.W -= speed;
+        if (window.KeyboardState.IsKeyDown(Keys.E))
+            cameraDelta.W += speed;
 
-        // W axis (ana/kata) - Z/X
-        if (window.KeyboardState.IsKeyDown(Keys.Z))
-            moveDelta.W -= speed;
-        if (window.KeyboardState.IsKeyDown(Keys.X))
-            moveDelta.W += speed;
-
-        if (moveDelta != Vector4.Zero)
-            _camera.Move(moveDelta);
+        if (cameraDelta != Vector4.Zero)
+        {
+            Camera.Move(cameraDelta);
+            // Lock Y to 1 after movement
+            Vector4 pos = Camera.Position;
+            Camera.Position = new Vector4(pos.X, 1.0f, pos.Z, pos.W);
+        }
     }
 
     /// <summary>
-    /// Handles rotation controls.
-    /// Mouse X: Yaw (XZ) | Mouse Y: Pitch (YZ) | Q/E: Roll (XY) | Wheel: ZW | LMB/RMB: XW | 1/3: YW
+    /// Handles rotations: only YZ (yaw) allowed, limited to +/- 80 degrees.
+    /// No XY (roll), no YW rotation.
     /// </summary>
     private void HandleRotations(float dt, GameWindow window)
     {
         float rotSpeed = RotationSpeed * dt;
+        float xz = 0, yz = 0, zw = 0;
 
-        // Use raw mouse delta for rotation (works with grabbed cursor)
         Vector2 delta = window.MouseState.Delta;
-
-        
-        // Yaw (XZ plane) - mouse X
+        // XZ plane - mouse X
         if (delta.X != 0)
-            _camera.Rotate(angleXZ: -delta.X * MouseSensitivity);
-
-        // Pitch (YZ plane) - mouse Y (inverted because camera looks at negative Z)
-        if (delta.Y != 0)
-            _camera.Rotate(angleYZ: -delta.Y * MouseSensitivity);
+            xz = -delta.X * MouseSensitivity;
         
+        // YZ plane - mouse Y, with limits (look up/down)
+        if (delta.Y != 0)
+            yz = -delta.Y * MouseSensitivity;
 
-        // Roll (XY plane) - Q/E
-        if (window.KeyboardState.IsKeyDown(Keys.Q))
-            _camera.Rotate(angleXY: rotSpeed);
-        if (window.KeyboardState.IsKeyDown(Keys.E))
-            _camera.Rotate(angleXY: -rotSpeed);
-
+        
         // ZW rotation - Mouse wheel
         float wheelDelta = window.MouseState.ScrollDelta.Y;
         if (Math.Abs(wheelDelta) > 0.01f)
-            _camera.Rotate(angleZW: Math.Sign(wheelDelta) * rotSpeed * 50.0f);
-
-        // XW rotation - LMB/RMB for opposite directions
-        if (window.MouseState.IsButtonDown(MouseButton.Left))
-            _camera.Rotate(angleXW: rotSpeed);
-        if (window.MouseState.IsButtonDown(MouseButton.Right))
-            _camera.Rotate(angleXW: -rotSpeed);
-
-        // YW rotation - 1/3 for opposite directions
-        if (window.KeyboardState.IsKeyDown(Keys.D1))
-            _camera.Rotate(angleYW: rotSpeed);
-        if (window.KeyboardState.IsKeyDown(Keys.D3))
-            _camera.Rotate(angleYW: -rotSpeed);
+            zw = Math.Sign(wheelDelta) * rotSpeed * 50.0f;
+            
+        Camera.Rotate(angleXZ:xz, angleYZ:yz, angleZW:zw);
     }
-    
 
     /// <summary>
     /// Disposes of resources.

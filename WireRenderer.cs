@@ -195,7 +195,7 @@ public sealed class WireRenderer : IDisposable
     /// </summary>
     /// <param name="edges">The edges to render in world space.</param>
     /// <param name="camera">The camera with dual quaternion rotation.</param>
-    public void Render(List<Edge4D> edges, Camera camera)
+    public void Render(List<Edge4D> edges, ICamera camera)
     {
         int edgeCount = edges.Count;
 

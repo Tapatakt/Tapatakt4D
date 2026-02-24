@@ -115,33 +115,36 @@ void main()
         uint edgeId = tileEdgeIds[baseIdx + i];
         EdgeProjection proj = projections[edgeId];
         
-        float dist = PointLineDistance(pixel, proj.start.xy, proj.end.xy);
+        float distPixelToProjection = PointLineDistance(pixel, proj.start.xy, proj.end.xy);
         
-        if (dist <= proj.thickness)
+        // Calculate interpolated distance at closest point first (for perspective thickness)
+        vec2 pa = pixel - proj.start.xy;
+        vec2 ba = proj.end.xy - proj.start.xy;
+        
+        float baLenSq = dot(ba, ba);
+        float t = 0.0;
+        
+        if (baLenSq > 0.0001)
         {
-            // Calculate interpolated values at closest point
-            vec2 pa = pixel - proj.start.xy;
-            vec2 ba = proj.end.xy - proj.start.xy;
-            
-            float baLenSq = dot(ba, ba);
-            float t = 0.0;
-            
-            if (baLenSq > 0.0001)
-            {
-                t = clamp(dot(pa, ba) / baLenSq, 0.0, 1.0);
-            }
-            
+            t = clamp(dot(pa, ba) / baLenSq, 0.0, 1.0);
+        }
+        
+        float distCameraToEdgePoint = mix(proj.start.z, proj.end.z, t);
+        
+        // Make far edges thinner - thickness is divided by distance
+        // Add a small value to avoid division by zero
+        if (distPixelToProjection <= proj.thickness) // / (0.1 + distAtPixel * 0.1))
+        {
             float w = mix(proj.start.w, proj.end.w, t);
-            float dist = mix(proj.start.z, proj.end.z, t);
             
             // Perspective-correct W clipping
             // At distance d from camera, max visible |w| is d * MAX_W_RATIO
-            float maxWAtDist = dist * MAX_W_RATIO;
+            float maxWAtDist = distCameraToEdgePoint * MAX_W_RATIO;
             if (abs(w) > maxWAtDist)
                 continue;
             
             hitW[hitCount] = w;
-            hitDist[hitCount] = dist;
+            hitDist[hitCount] = distCameraToEdgePoint;
             hitCount++;
         }
     }
